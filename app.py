@@ -1,4 +1,5 @@
 import os, json, sqlite3, secrets, zipfile, io, re
+from urllib.parse import urlparse
 from functools import wraps
 from flask import Flask, request, jsonify, session, send_file, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,7 +8,7 @@ import requests
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(APP_DIR, "kwop.db"))
 app = Flask(__name__, static_folder=None)
-app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-this-secret")
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE","0")=="1", MAX_CONTENT_LENGTH=2*1024*1024)
 
 def db():
