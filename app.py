@@ -530,6 +530,79 @@ def score_get():
     return jsonify(score=sum(parts.values()),breakdown=parts,label="Workspace readiness estimate, not a prediction of revenue.")
 
 
+
+@app.post("/api/ai/build-business")
+@signed
+def build_business():
+    d=request.get_json(silent=True) or {}
+    kind=str(d.get("kind","SaaS")).strip()[:40]
+    interests=str(d.get("interests","")).strip()[:500]
+    audience=str(d.get("audience","")).strip()[:500]
+    idea=str(d.get("idea","")).strip()[:1800]
+    avoid=str(d.get("avoid","")).strip()[:500]
+    hours=str(d.get("hours","60")).strip()[:30]
+    budget=str(d.get("budget","0")).strip()[:30]
+    skills=str(d.get("skills","Beginner")).strip()[:80]
+    goal=str(d.get("goal","Build my first online business")).strip()[:250]
+    if not (interests or idea):
+        return err("Tell us what you are interested in or describe an idea first.")
+    prompt=f"""You are an expert AI business builder. Turn this person's answers into ONE concrete, realistic, launchable {kind} business. Do not give a list of ideas. Pick the strongest idea and make the decisions for them.
+Answers:
+Interests: {interests}
+Target audience: {audience or "Choose a specific paying audience"}
+Idea or interests: {idea or "No fixed idea; invent one from the interests"}
+Avoid: {avoid or "No stated restrictions"}
+Time available: {hours} minutes per day
+Budget: {budget}
+Experience: {skills}
+Goal: {goal}
+
+Return ONLY valid JSON with this exact structure:
+{{
+"name":"short memorable brand name",
+"slug":"short-url-slug",
+"tagline":"short promise",
+"one_liner":"what the business does in one sentence",
+"audience":"specific audience",
+"problem":"urgent problem in plain language",
+"solution":"clear product solution",
+"features":[{{"name":"feature name","description":"benefit"}}],
+"pricing":[{{"name":"Free","price":0,"description":"what is included"}},{{"name":"Pro","price":9,"description":"what is included"}}],
+"landing":{{"headline":"strong customer-facing headline","subheadline":"clear explanation","body":"2-4 short paragraphs with benefits and how it works"}},
+"brand":{{"style":"visual direction","primary":"hex colour","accent":"hex colour"}},
+"marketing":{{"positioning":"one sentence","video_hooks":["three original short-video hooks"],"channels":["three realistic channels"]}},
+"first_7_days":["seven small specific tasks"],
+"brief":"detailed product specification in Markdown, including MVP scope, user journey, page structure, pricing hypothesis, validation and realistic risks"
+}}
+Make the MVP possible for a solo beginner with the stated time and budget. Prefer a narrow B2C SaaS or simple digital business. Do not promise income, guaranteed customers or market validation. No fake testimonials, statistics or invented competitors. Features must be specific. Keep pricing realistic. If budget is zero, use free tools and a waitlist instead of paid infrastructure. Do not suggest regulated or age-restricted products. Output valid JSON only."""
+    t,e=ai(prompt,6500)
+    if e:return err(e,503)
+    try:
+        b=parse_json(t)
+        required=("name","slug","tagline","one_liner","audience","problem","solution","features","pricing","landing","brief")
+        if not isinstance(b,dict) or any(not b.get(k) for k in required):raise ValueError("Incomplete business plan.")
+        name=str(b["name"])[:100]
+        slug=re.sub(r"[^a-z0-9]+","-",str(b["slug"]).lower()).strip("-")[:50] or "my-business"
+        if select("kwop_launches",{"select":"id","slug":"eq."+slug,"limit":"1"}):slug=slug+"-"+secrets.token_hex(2)
+        features=b["features"][:6] if isinstance(b["features"],list) else []
+        pricing=b["pricing"][:3] if isinstance(b["pricing"],list) else []
+        plans=[]
+        for p in pricing:
+            if not isinstance(p,dict):continue
+            try:price=max(0,float(p.get("price",0)))
+            except (TypeError,ValueError):price=0
+            plans.append({"name":str(p.get("name","Plan"))[:60],"price":price,"description":str(p.get("description",""))[:300]})
+        if not plans:plans=[{"name":"Free","price":0,"description":"Early access and core features"}]
+        landing=b.get("landing") if isinstance(b.get("landing"),dict) else {}
+        copy={"headline":str(landing.get("headline") or b["tagline"])[:220],"subheadline":str(landing.get("subheadline") or b["one_liner"])[:500],"body":str(landing.get("body") or b["solution"])[:3000]}
+        brief=str(b["brief"])[:18000]
+        project=insert("kwop_projects",{"user_id":session["user_id"],"name":name,"brief":brief})
+        launch=insert("kwop_launches",{"user_id":session["user_id"],"slug":slug,"title":name,"description":str(b["one_liner"])[:1800],"landing_copy":copy,"plans":plans,"published":True})
+        result={"business":{"name":name,"slug":slug,"tagline":str(b["tagline"])[:250],"one_liner":str(b["one_liner"])[:600],"audience":str(b["audience"])[:500],"problem":str(b["problem"])[:1200],"solution":str(b["solution"])[:1500],"features":features,"pricing":plans,"landing":copy,"brand":b.get("brand",{}),"marketing":b.get("marketing",{}),"first_7_days":b.get("first_7_days",[])[:7],"brief":brief},"project_id":project.get("id") if project else None,"launch_id":launch.get("id") if launch else None,"url":request.host_url.rstrip("/")+"/p/"+slug}
+        return jsonify(result),201
+    except (ValueError,TypeError,KeyError) as ex:
+        return err("The AI could not create a complete business plan. Please try again. "+str(ex),502)
+
 @app.errorhandler(RuntimeError)
 def runtime_error(e):return jsonify(error=str(e)),502
 @app.errorhandler(404)
