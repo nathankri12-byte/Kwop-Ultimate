@@ -25,6 +25,8 @@ def init_db():
         """)
 
 init_db()
+with db() as c:
+    c.executescript("""CREATE TABLE IF NOT EXISTS tasks(user_id INTEGER NOT NULL, task_no INTEGER NOT NULL, completed INTEGER DEFAULT 0, PRIMARY KEY(user_id,task_no)); CREATE TABLE IF NOT EXISTS profiles(user_id INTEGER PRIMARY KEY, interests TEXT, audience TEXT, hours TEXT, avoid TEXT, goal TEXT);""")
 
 def signed_in(fn):
     @wraps(fn)
@@ -261,6 +263,73 @@ def dashboard():
         cr=c.execute("SELECT COUNT(*) n,COALESCE(SUM(views),0) views,COALESCE(SUM(clicks),0) clicks FROM creators WHERE user_id=?",(uid,)).fetchone()
         f=c.execute("SELECT COUNT(*) n FROM features WHERE user_id=? AND done=1",(uid,)).fetchone()["n"]
     return jsonify(projects=p,creators=cr["n"],views=cr["views"],clicks=cr["clicks"],completed_features=f)
+
+
+@app.get("/api/tasks")
+@signed_in
+def get_tasks():
+    with db() as c:
+        rows=c.execute("SELECT task_no FROM tasks WHERE user_id=? AND completed=1",(session["user_id"],)).fetchall()
+    return jsonify(completed=[r["task_no"] for r in rows])
+
+@app.put("/api/tasks")
+@signed_in
+def save_tasks():
+    d=request.get_json(silent=True) or {}
+    completed=sorted(set(int(x) for x in d.get("completed",[]) if 0 <= int(x) < 30))
+    with db() as c:
+        c.execute("DELETE FROM tasks WHERE user_id=?",(session["user_id"],))
+        c.executemany("INSERT INTO tasks(user_id,task_no,completed) VALUES(?,?,1)",[(session["user_id"],x) for x in completed])
+    return jsonify(completed=completed)
+
+@app.get("/api/profile")
+@signed_in
+def get_profile():
+    with db() as c:
+        row=c.execute("SELECT interests,audience,hours,avoid,goal FROM profiles WHERE user_id=?",(session["user_id"],)).fetchone()
+    return jsonify(profile=dict(row) if row else {})
+
+@app.put("/api/profile")
+@signed_in
+def save_profile():
+    d=request.get_json(silent=True) or {}
+    with db() as c:
+        c.execute("INSERT INTO profiles(user_id,interests,audience,hours,avoid,goal) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET interests=excluded.interests,audience=excluded.audience,hours=excluded.hours,avoid=excluded.avoid,goal=excluded.goal",(session["user_id"],d.get("interests",""),d.get("audience",""),d.get("hours","30"),d.get("avoid",""),d.get("goal","")))
+    return jsonify(ok=True)
+
+@app.get("/api/features")
+@signed_in
+def get_features():
+    with db() as c:
+        rows=c.execute("SELECT id,name,priority,done FROM features WHERE user_id=? ORDER BY id DESC",(session["user_id"],)).fetchall()
+    return jsonify(features=[dict(x) for x in rows])
+
+@app.post("/api/features")
+@signed_in
+def add_feature():
+    d=request.get_json(silent=True) or {}
+    name=str(d.get("name","")).strip()
+    if not name:return jsonify(error="Feature name is required."),400
+    with db() as c:
+        cur=c.execute("INSERT INTO features(user_id,name,priority) VALUES(?,?,?)",(session["user_id"],name,d.get("priority","Medium")))
+        row=c.execute("SELECT id,name,priority,done FROM features WHERE id=?",(cur.lastrowid,)).fetchone()
+    return jsonify(feature=dict(row))
+
+@app.patch("/api/features/<int:feature_id>")
+@signed_in
+def update_feature(feature_id):
+    d=request.get_json(silent=True) or {}
+    with db() as c:
+        cur=c.execute("UPDATE features SET done=COALESCE(?,done),priority=COALESCE(?,priority) WHERE id=? AND user_id=?",(int(d["done"]) if "done" in d else None,d.get("priority"),feature_id,session["user_id"]))
+    if not cur.rowcount:return jsonify(error="Feature not found."),404
+    return jsonify(ok=True)
+
+@app.delete("/api/features/<int:feature_id>")
+@signed_in
+def delete_feature(feature_id):
+    with db() as c:
+        c.execute("DELETE FROM features WHERE id=? AND user_id=?",(feature_id,session["user_id"]))
+    return jsonify(ok=True)
 
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",5000)),debug=False)
