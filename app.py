@@ -185,8 +185,12 @@ def projects():
 @app.get("/api/creators")
 @signed
 def get_creators():
-    rows=select("kwop_creators",{"select":"id,name,profile_url,status,views,code,clicks,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"})
-    for x in rows:x["url"]=x.pop("profile_url",None)
+    rows=select("kwop_creators",{"select":"id,name,profile_url,status,views,code,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"})
+    codes=[x["code"] for x in rows if x.get("code")]
+    links=select("kwop_tracking_links",{"select":"code,clicks","code":"in.("+",".join(codes)+")"}) if codes else []
+    counts={x["code"]:x.get("clicks",0) for x in links}
+    for x in rows:
+        x["url"]=x.pop("profile_url",None);x["clicks"]=counts.get(x.get("code"),0)
     return jsonify(creators=rows)
 @app.post("/api/creators")
 @signed
@@ -199,7 +203,8 @@ def add_creator():
     if status not in ("To contact","Contacted","Interested","Posted","Declined"):return err("Invalid creator status.")
     code=secrets.token_urlsafe(9)
     row=insert("kwop_creators",{"user_id":session["user_id"],"name":name[:150],"profile_url":url or None,"status":status,"views":views,"code":code})
-    row["url"]=row.pop("profile_url",None)
+    insert("kwop_tracking_links",{"user_id":session["user_id"],"code":code,"target_url":url or None,"clicks":0})
+    row["url"]=row.pop("profile_url",None);row["clicks"]=0
     return jsonify(creator=row,tracking_url=request.host_url.rstrip("/")+"/r/"+code)
 @app.patch("/api/creators/<creator_id>")
 @signed
@@ -214,24 +219,36 @@ def update_creator(creator_id):
     if not p:return err("No changes supplied.")
     rows=patch("kwop_creators",{"id":"eq."+creator_id,"user_id":"eq."+session["user_id"]},p)
     if not rows:return err("Creator not found.",404)
+    if "url" in d:patch("kwop_tracking_links",{"code":"eq."+rows[0]["code"],"user_id":"eq."+session["user_id"]},{"target_url":p.get("profile_url")})
+    rows[0]["url"]=rows[0].pop("profile_url",None)
     return jsonify(creator=rows[0])
 @app.delete("/api/creators/<creator_id>")
 @signed
 def remove_creator(creator_id):
+    rows=select("kwop_creators",{"select":"code","id":"eq."+creator_id,"user_id":"eq."+session["user_id"]})
+    if rows:delete("kwop_tracking_links",{"code":"eq."+rows[0]["code"],"user_id":"eq."+session["user_id"]})
     delete("kwop_creators",{"id":"eq."+creator_id,"user_id":"eq."+session["user_id"]});return jsonify(ok=True)
 @app.get("/r/<code>")
 def track(code):
-    rows=select("kwop_creators",{"select":"id,profile_url,clicks","code":"eq."+code,"limit":"1"})
-    if not rows:return "Tracking link not found",404
-    row=rows[0];patch("kwop_creators",{"id":"eq."+str(row["id"])},{"clicks":int(row.get("clicks") or 0)+1})
-    try:dest=valid_url(row.get("profile_url"),False) if row.get("profile_url") else "/"
-    except ValueError:dest="/"
-    return redirect(dest,302)
+    if not SB_KEY:return "Tracking is unavailable",503
+    public_headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY}
+    try:
+        r=requests.get(SB_URL+"/rest/v1/kwop_tracking_links",params={"select":"code,target_url,clicks","code":"eq."+code,"limit":"1"},headers=public_headers,timeout=15)
+        rows=r.json() if r.ok else []
+        if not rows:return "Tracking link not found",404
+        row=rows[0]
+        requests.patch(SB_URL+"/rest/v1/kwop_tracking_links",params={"code":"eq."+code},headers={**public_headers,"Content-Type":"application/json","Prefer":"return=minimal"},json={"clicks":int(row.get("clicks") or 0)+1},timeout=15)
+        try:dest=valid_url(row.get("target_url"),False) if row.get("target_url") else "/"
+        except ValueError:dest="/"
+        return redirect(dest,302)
+    except requests.RequestException:return "Tracking temporarily unavailable",503
 @app.get("/api/dashboard")
 @signed
 def dashboard():
-    uid=session["user_id"];p=select("kwop_projects",{"select":"id","user_id":"eq."+uid});c=select("kwop_creators",{"select":"views,clicks","user_id":"eq."+uid});f=select("kwop_features",{"select":"id","user_id":"eq."+uid,"done":"eq.true"})
-    return jsonify(projects=len(p),creators=len(c),views=sum(int(x.get("views") or 0) for x in c),clicks=sum(int(x.get("clicks") or 0) for x in c),completed_features=len(f))
+    uid=session["user_id"];p=select("kwop_projects",{"select":"id","user_id":"eq."+uid});c=select("kwop_creators",{"select":"views,code","user_id":"eq."+uid});f=select("kwop_features",{"select":"id","user_id":"eq."+uid,"done":"eq.true"})
+    codes=[x["code"] for x in c if x.get("code")]
+    links=select("kwop_tracking_links",{"select":"code,clicks","code":"in.("+",".join(codes)+")"}) if codes else []
+    return jsonify(projects=len(p),creators=len(c),views=sum(int(x.get("views") or 0) for x in c),clicks=sum(int(x.get("clicks") or 0) for x in links),completed_features=len(f))
 @app.get("/api/tasks")
 @signed
 def tasks_get():
