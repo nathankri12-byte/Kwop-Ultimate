@@ -1,4 +1,5 @@
 import os, json, secrets, zipfile, io, re, time
+from html import escape as html_escape
 from functools import wraps
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, session, send_file, redirect
@@ -301,6 +302,231 @@ def features_patch(feature_id):
 @signed
 def features_delete(feature_id):
     delete("kwop_features",{"id":"eq."+feature_id,"user_id":"eq."+session["user_id"]});return jsonify(ok=True)
+
+
+# --- Extended launch, analytics, leads, revenue, email drafts and AI assistant ---
+def owned_upsert(table,payload,conflict):
+    return sb("POST","/rest/v1/"+table,params={"on_conflict":conflict},data=payload,prefer="resolution=merge-duplicates,return=representation") or []
+
+@app.get("/api/launches")
+@signed
+def launches_get():
+    return jsonify(launches=select("kwop_launches",{"select":"id,slug,title,description,landing_copy,plans,published,created_at,updated_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"}))
+
+@app.post("/api/launches")
+@signed
+def launches_add():
+    d=request.get_json(silent=True) or {}
+    title=str(d.get("title","")).strip()
+    if not title:return err("Launch title is required.")
+    slug=re.sub(r"[^a-z0-9]+","-",str(d.get("slug") or title).lower()).strip("-")[:60]
+    if not slug:return err("Choose a valid public page name.")
+    description=str(d.get("description",""))[:1800]
+    copy=d.get("landing_copy") if isinstance(d.get("landing_copy"),dict) else {}
+    plans=d.get("plans") if isinstance(d.get("plans"),list) else []
+    clean_plans=[]
+    for p in plans[:4]:
+        if isinstance(p,dict):
+            try:price=max(0,float(p.get("price",0)))
+            except (TypeError,ValueError):price=0
+            clean_plans.append({"name":str(p.get("name","Plan"))[:60],"price":price,"description":str(p.get("description",""))[:300]})
+    row=insert("kwop_launches",{"user_id":session["user_id"],"slug":slug,"title":title[:150],"description":description,"landing_copy":copy,"plans":clean_plans,"published":False})
+    return jsonify(launch=row),201
+
+@app.patch("/api/launches/<launch_id>")
+@signed
+def launches_patch(launch_id):
+    d=request.get_json(silent=True) or {};p={}
+    for k,limit in [("title",150),("description",1800),("slug",60)]:
+        if k in d:
+            value=str(d[k]).strip()
+            if not value:return err(k+" cannot be empty.")
+            if k=="slug":value=re.sub(r"[^a-z0-9]+","-",value.lower()).strip("-")
+            p[k]=value[:limit]
+    if "published" in d:p["published"]=bool(d["published"])
+    if "landing_copy" in d and isinstance(d["landing_copy"],dict):p["landing_copy"]=d["landing_copy"]
+    if "plans" in d and isinstance(d["plans"],list):
+        plans=[]
+        for x in d["plans"][:4]:
+            if not isinstance(x,dict):continue
+            try:price=max(0,float(x.get("price",0)))
+            except (TypeError,ValueError):price=0
+            plans.append({"name":str(x.get("name","Plan"))[:60],"price":price,"description":str(x.get("description",""))[:300]})
+        p["plans"]=plans
+    if not p:return err("No changes supplied.")
+    rows=patch("kwop_launches",{"id":"eq."+launch_id,"user_id":"eq."+session["user_id"]},p)
+    if not rows:return err("Launch page not found.",404)
+    return jsonify(launch=rows[0])
+
+@app.delete("/api/launches/<launch_id>")
+@signed
+def launches_delete(launch_id):
+    delete("kwop_launches",{"id":"eq."+launch_id,"user_id":"eq."+session["user_id"]})
+    return jsonify(ok=True)
+
+@app.get("/p/<slug>")
+def public_launch(slug):
+    rows=select("kwop_launches",{"select":"id,slug,title,description,landing_copy,plans","slug":"eq."+slug,"published":"eq.true","limit":"1"})
+    if not rows:return "Launch page not found",404
+    x=rows[0];copy=x.get("landing_copy") or {};plans=x.get("plans") or []
+    headline=html_escape(str(copy.get("headline") or x["title"]))
+    sub=html_escape(str(copy.get("subheadline") or x.get("description","")))
+    body=html_escape(str(copy.get("body") or ""))
+    pricing="".join('<article><h2>'+html_escape(str(p.get("name","Plan")))+ '</h2><strong>€'+html_escape(str(p.get("price",0)))+'/mo</strong><p>'+html_escape(str(p.get("description","")))+ '</p><button onclick="track(\'cta_click\',\'plan:'+html_escape(str(p.get("name","Plan")))+'\')">Get started</button></article>' for p in plans)
+    return """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>"""+html_escape(x["title"])+"""</title><style>body{margin:0;background:#09111e;color:#f5f7fb;font:16px/1.6 system-ui}main{max-width:900px;margin:12vh auto;padding:28px}.hero{text-align:center}.hero h1{font-size:clamp(38px,7vw,68px);line-height:1.04}.muted{color:#aab7c9}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:42px}article{background:#142239;border:1px solid #31425c;border-radius:16px;padding:22px}button{background:#c5f36a;border:0;border-radius:9px;padding:12px 18px;font-weight:700;cursor:pointer}</style><main><section class="hero"><h1>"""+headline+"""</h1><p class="muted">"""+sub+"""</p><p>"""+body+"""</p><button onclick="track('cta_click','main_cta')">Get started</button></section><section class="plans">"""+pricing+"""</section></main><script>
+const launchId="""+json.dumps(x["id"])+""";let sk=sessionStorage.getItem('kwop_public_session');if(!sk){sk=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());sessionStorage.setItem('kwop_public_session',sk)}
+function track(type,label){fetch('/api/public-event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({launch_id:launchId,session_key:sk,event_type:type,label:label||'',page_path:location.pathname})}).catch(()=>{})}
+track('page_view','');</script></html>"""
+
+@app.post("/api/public-event")
+def public_event():
+    d=request.get_json(silent=True) or {}
+    if d.get("event_type") not in ("page_view","cta_click","pricing_view"):return err("Invalid event.")
+    launch_id=str(d.get("launch_id",""))
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}",launch_id):return err("Invalid launch.")
+    sk=str(d.get("session_key",""))
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,80}",sk):return err("Invalid session.")
+    payload={"launch_id":launch_id,"session_key":sk,"event_type":d["event_type"],"page_path":str(d.get("page_path","/"))[:200],"label":str(d.get("label",""))[:120]}
+    try:
+        r=requests.post(SB_URL+"/rest/v1/kwop_public_events",headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json","Prefer":"return=minimal"},json=payload,timeout=12)
+        if not r.ok:return err("Event could not be recorded.",400)
+        return jsonify(ok=True)
+    except requests.RequestException:return err("Analytics temporarily unavailable.",503)
+
+@app.get("/api/analytics")
+@signed
+def analytics_get():
+    launches=select("kwop_launches",{"select":"id,slug,title,published","user_id":"eq."+session["user_id"]})
+    ids=[x["id"] for x in launches]
+    events=select("kwop_public_events",{"select":"launch_id,session_key,event_type,page_path,label,created_at","launch_id":"in.("+",".join(ids)+")","order":"created_at.desc","limit":"1000"}) if ids else []
+    summary={"page_views":sum(1 for e in events if e["event_type"]=="page_view"),"cta_clicks":sum(1 for e in events if e["event_type"]=="cta_click"),"pricing_views":sum(1 for e in events if e["event_type"]=="pricing_view"),"unique_visitors":len(set(e["session_key"] for e in events))}
+    names={x["id"]:x["title"] for x in launches}
+    recent=[{**e,"launch_title":names.get(e["launch_id"],"Launch")} for e in events[:50]]
+    return jsonify(summary=summary,launches=launches,recent=recent)
+
+@app.get("/api/leads")
+@signed
+def leads_get():
+    return jsonify(leads=select("kwop_leads",{"select":"id,email,name,source,status,score,notes,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"}))
+@app.post("/api/leads")
+@signed
+def leads_add():
+    d=request.get_json(silent=True) or {};email=str(d.get("email","")).strip().lower()
+    if not re.match(r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",email):return err("Enter a valid email address.")
+    row=insert("kwop_leads",{"user_id":session["user_id"],"email":email[:254],"name":str(d.get("name",""))[:120],"source":str(d.get("source","manual"))[:100],"status":"new","score":min(100,max(0,int(d.get("score",0)))),"notes":str(d.get("notes",""))[:2000]})
+    return jsonify(lead=row),201
+@app.patch("/api/leads/<lead_id>")
+@signed
+def leads_patch(lead_id):
+    d=request.get_json(silent=True) or {};p={}
+    if "status" in d:
+        if d["status"] not in ("new","qualified","contacted","customer","lost"):return err("Invalid lead status.")
+        p["status"]=d["status"]
+    if "score" in d:
+        try:p["score"]=min(100,max(0,int(d["score"])))
+        except (ValueError,TypeError):return err("Score must be between 0 and 100.")
+    if "notes" in d:p["notes"]=str(d["notes"])[:2000]
+    if not p:return err("No changes supplied.")
+    if not patch("kwop_leads",{"id":"eq."+lead_id,"user_id":"eq."+session["user_id"]},p):return err("Lead not found.",404)
+    return jsonify(ok=True)
+@app.delete("/api/leads/<lead_id>")
+@signed
+def leads_delete(lead_id):
+    delete("kwop_leads",{"id":"eq."+lead_id,"user_id":"eq."+session["user_id"]})
+    return jsonify(ok=True)
+
+@app.get("/api/revenue")
+@signed
+def revenue_get():
+    rows=select("kwop_revenue",{"select":"id,amount,currency,source,description,status,occurred_at","user_id":"eq."+session["user_id"],"order":"occurred_at.desc"})
+    total=sum(float(x["amount"]) for x in rows if x["status"]=="paid")
+    return jsonify(entries=rows,total=round(total,2),count=len(rows))
+@app.post("/api/revenue")
+@signed
+def revenue_add():
+    d=request.get_json(silent=True) or {}
+    try:amount=round(float(d.get("amount",0)),2)
+    except (ValueError,TypeError):return err("Enter a valid amount.")
+    if amount<0 or amount>100000000:return err("Amount is out of range.")
+    currency=str(d.get("currency","EUR")).upper()
+    if currency not in ("EUR","USD","GBP"):return err("Unsupported currency.")
+    status=str(d.get("status","paid"))
+    if status not in ("paid","pending","refunded"):return err("Invalid revenue status.")
+    row=insert("kwop_revenue",{"user_id":session["user_id"],"amount":amount,"currency":currency,"source":str(d.get("source","manual"))[:100],"description":str(d.get("description",""))[:250],"status":status})
+    return jsonify(entry=row),201
+@app.delete("/api/revenue/<entry_id>")
+@signed
+def revenue_delete(entry_id):
+    delete("kwop_revenue",{"id":"eq."+entry_id,"user_id":"eq."+session["user_id"]})
+    return jsonify(ok=True)
+
+@app.get("/api/campaigns")
+@signed
+def campaigns_get():
+    return jsonify(campaigns=select("kwop_campaigns",{"select":"id,name,subject,body,status,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"}))
+@app.post("/api/campaigns")
+@signed
+def campaigns_add():
+    d=request.get_json(silent=True) or {};name=str(d.get("name","")).strip()
+    if not name:return err("Campaign name is required.")
+    row=insert("kwop_campaigns",{"user_id":session["user_id"],"name":name[:150],"subject":str(d.get("subject",""))[:200],"body":str(d.get("body",""))[:10000],"status":"draft"})
+    return jsonify(campaign=row),201
+@app.patch("/api/campaigns/<campaign_id>")
+@signed
+def campaigns_patch(campaign_id):
+    d=request.get_json(silent=True) or {};p={}
+    for k,n in (("name",150),("subject",200),("body",10000)):
+        if k in d:p[k]=str(d[k])[:n]
+    if "status" in d:
+        if d["status"] not in ("draft","ready","sent"):return err("Invalid campaign status.")
+        p["status"]=d["status"]
+    if not p:return err("No changes supplied.")
+    if not patch("kwop_campaigns",{"id":"eq."+campaign_id,"user_id":"eq."+session["user_id"]},p):return err("Campaign not found.",404)
+    return jsonify(ok=True)
+@app.delete("/api/campaigns/<campaign_id>")
+@signed
+def campaigns_delete(campaign_id):
+    delete("kwop_campaigns",{"id":"eq."+campaign_id,"user_id":"eq."+session["user_id"]})
+    return jsonify(ok=True)
+
+@app.post("/api/ai/campaign")
+@signed
+def campaign_ai():
+    d=request.get_json(silent=True) or {}
+    t,e=ai("Write a concise ethical opt-in email campaign for this product. Return JSON with subject, preview, body, CTA. Never invent customer claims or imply a recipient consented. Product: "+str(d.get("product",""))[:200]+". Audience: "+str(d.get("audience",""))[:500]+". Offer: "+str(d.get("offer",""))[:500],1800)
+    if e:return err(e,503)
+    try:return jsonify(campaign=parse_json(t))
+    except Exception:return jsonify(campaign={"body":t})
+
+@app.post("/api/ai/assistant")
+@signed
+def assistant_chat():
+    d=request.get_json(silent=True) or {};message=str(d.get("message","")).strip()
+    if not message:return err("Write a question first.")
+    if len(message)>3000:return err("Message is too long.")
+    history=select("kwop_ai_conversations",{"select":"role,content","user_id":"eq."+session["user_id"],"order":"created_at.desc","limit":"8"})
+    context="\\n".join(x["role"]+": "+x["content"][:1200] for x in reversed(history))
+    t,e=ai("You are a practical SaaS launch coach. Be specific, honest, avoid invented metrics and avoid claiming integrations are active.\\nRecent conversation:\\n"+context+"\\nUser: "+message,1800)
+    if e:return err(e,503)
+    insert("kwop_ai_conversations",{"user_id":session["user_id"],"role":"user","content":message})
+    insert("kwop_ai_conversations",{"user_id":session["user_id"],"role":"assistant","content":t})
+    return jsonify(reply=t)
+
+@app.get("/api/score")
+@signed
+def score_get():
+    uid=session["user_id"]
+    projects=select("kwop_projects",{"select":"id,brief","user_id":"eq."+uid})
+    features=select("kwop_features",{"select":"id,done","user_id":"eq."+uid})
+    creators=select("kwop_creators",{"select":"id,status","user_id":"eq."+uid})
+    leads=select("kwop_leads",{"select":"id,status","user_id":"eq."+uid})
+    visits=select("kwop_public_events",{"select":"id,event_type","limit":"1000"}) if False else []
+    parts={"product":min(25,10*bool(projects)+min(15,sum(1 for x in features if x["done"]))),"distribution":min(25,5*sum(1 for x in creators if x["status"] in ("Contacted","Interested","Posted"))),"validation":min(25,5*len(leads)),"execution":min(25,round(25*sum(1 for x in features if x["done"])/max(1,len(features))))}
+    return jsonify(score=sum(parts.values()),breakdown=parts,label="Workspace readiness estimate, not a prediction of revenue.")
+
+@app.get("/api/health")
+def health_extended():
+    return jsonify(status="ok",supabase_configured=bool(SB_KEY),ai_configured=bool(GEMINI_KEY),model=GEMINI_MODEL)
 
 @app.errorhandler(RuntimeError)
 def runtime_error(e):return jsonify(error=str(e)),502
