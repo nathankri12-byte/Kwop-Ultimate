@@ -53,7 +53,7 @@ def ai(prompt, max_tokens=1800):
 
 @app.get("/")
 def home():
-    return app.send_static_file("index.html")
+    return send_file(os.path.join(APP_DIR, "index.html"))
 
 @app.get("/integration.js")
 def integration_js():
