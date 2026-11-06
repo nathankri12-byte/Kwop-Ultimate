@@ -108,6 +108,7 @@ def register():
 @app.post("/api/auth/login")
 def login():
     d=request.get_json(silent=True) or {}
+    if not SB_KEY:return err("Supabase is not configured on the server.",503)
     try:
         r=requests.post(SB_URL+"/auth/v1/token",params={"grant_type":"password"},headers=auth_headers(SB_KEY),json={"email":str(d.get("email","")).strip().lower(),"password":str(d.get("password",""))},timeout=20);j=r.json()
         if not r.ok:return err(j.get("msg") or j.get("message") or "Login failed. Confirm your email if you just registered.",401)
@@ -372,14 +373,18 @@ def public_launch(slug):
     headline=html_escape(str(copy.get("headline") or x["title"]))
     sub=html_escape(str(copy.get("subheadline") or x.get("description","")))
     body=html_escape(str(copy.get("body") or ""))
-    pricing="".join('<article><h2>'+html_escape(str(p.get("name","Plan")))+ '</h2><strong>€'+html_escape(str(p.get("price",0)))+'/mo</strong><p>'+html_escape(str(p.get("description","")))+ '</p><button onclick="track(\'cta_click\',\'plan:'+html_escape(str(p.get("name","Plan")))+'\')">Get started</button></article>' for p in plans)
-    return """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>"""+html_escape(x["title"])+"""</title><style>body{margin:0;background:#09111e;color:#f5f7fb;font:16px/1.6 system-ui}main{max-width:900px;margin:12vh auto;padding:28px}.hero{text-align:center}.hero h1{font-size:clamp(38px,7vw,68px);line-height:1.04}.muted{color:#aab7c9}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:42px}article{background:#142239;border:1px solid #31425c;border-radius:16px;padding:22px}button{background:#c5f36a;border:0;border-radius:9px;padding:12px 18px;font-weight:700;cursor:pointer}</style><main><section class="hero"><h1>"""+headline+"""</h1><p class="muted">"""+sub+"""</p><p>"""+body+"""</p><button onclick="track('cta_click','main_cta')">Get started</button></section><section class="plans">"""+pricing+"""</section></main><script>
+    pricing="".join('<article><h2>'+html_escape(str(p.get("name","Plan")))+ '</h2><strong>€'+html_escape(str(p.get("price",0)))+'/mo</strong><p>'+html_escape(str(p.get("description","")))+ '</p><button onclick="signalInterest(\\'plan:'+html_escape(str(p.get("name","Plan")))+'\\')">Signal interest</button></article>' for p in plans)
+    return """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>"""+html_escape(x["title"])+"""</title><style>body{margin:0;background:#09111e;color:#f5f7fb;font:16px/1.6 system-ui}main{max-width:900px;margin:12vh auto;padding:28px}.hero{text-align:center}.hero h1{font-size:clamp(38px,7vw,68px);line-height:1.04}.muted{color:#aab7c9}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:42px}article{background:#142239;border:1px solid #31425c;border-radius:16px;padding:22px}button{background:#c5f36a;border:0;border-radius:9px;padding:12px 18px;font-weight:700;cursor:pointer}.consent{position:fixed;bottom:16px;left:16px;right:16px;max-width:760px;margin:auto;background:#142239;border:1px solid #425574;border-radius:14px;padding:16px;box-shadow:0 12px 50px #0008;z-index:9}.consent p{margin:0 0 10px}.consent button+button{margin-left:8px;background:#263a56;color:white}</style><main><section class="hero"><h1>"""+headline+"""</h1><p class="muted">"""+sub+"""</p><p>"""+body+"""</p><button onclick="signalInterest('main_cta')">I'm interested</button><p id="feedback" class="muted"></p></section><section class="plans">"""+pricing+"""</section></main><aside id="analyticsConsent" class="consent"><p><b>Anonymous analytics</b><br>This page records page views and button clicks only if you agree. It does not record keystrokes or form contents.</p><button id="acceptAnalytics">Accept analytics</button><button id="declineAnalytics">Decline</button></aside><script>
 const launchId="""+json.dumps(x["id"])+""";let sk=sessionStorage.getItem('kwop_public_session');if(!sk){sk=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random());sessionStorage.setItem('kwop_public_session',sk)}
-function track(type,label){fetch('/api/public-event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({launch_id:launchId,session_key:sk,event_type:type,label:label||'',page_path:location.pathname})}).catch(()=>{})}
-track('page_view','');</script></html>"""
-
+let analyticsAllowed=localStorage.getItem('kwop_analytics_consent')==='yes';if(analyticsAllowed)document.getElementById('analyticsConsent').remove();
+function track(type,label){if(!analyticsAllowed)return;fetch('/api/public-event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({launch_id:launchId,session_key:sk,event_type:type,label:label||'',page_path:location.pathname})}).catch(()=>{})}
+function signalInterest(label){track('cta_click',label);document.getElementById('feedback').textContent='Thanks. This demo records anonymous interest only; it does not create an account or take payment.'}
+document.getElementById('acceptAnalytics').onclick=()=>{analyticsAllowed=true;localStorage.setItem('kwop_analytics_consent','yes');document.getElementById('analyticsConsent').remove();track('page_view','')};
+document.getElementById('declineAnalytics').onclick=()=>{localStorage.setItem('kwop_analytics_consent','no');document.getElementById('analyticsConsent').remove()};
+if(analyticsAllowed)track('page_view','');</script></html>"""
 @app.post("/api/public-event")
 def public_event():
+    if not SB_KEY:return err("Analytics is not configured.",503)
     d=request.get_json(silent=True) or {}
     if d.get("event_type") not in ("page_view","cta_click","pricing_view"):return err("Invalid event.")
     launch_id=str(d.get("launch_id",""))
