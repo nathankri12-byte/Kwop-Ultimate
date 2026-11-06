@@ -22,7 +22,8 @@ class AppSmokeTests(unittest.TestCase):
         self.assertEqual(response.status_code,503)
 
     def test_public_event_rejects_invalid_type(self):
-        response=self.client.post("/api/public-event",json={"event_type":"arbitrary","launch_id":"00000000-0000-0000-0000-000000000000","session_key":"session-12345678"})
+        with patch.object(application,"SB_KEY","publishable-test-key"):
+            response=self.client.post("/api/public-event",json={"event_type":"arbitrary","launch_id":"00000000-0000-0000-0000-000000000000","session_key":"session-12345678"})
         self.assertEqual(response.status_code,400)
 
     def test_public_page_escapes_user_content_and_shows_consent(self):
