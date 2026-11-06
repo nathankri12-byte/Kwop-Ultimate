@@ -6,7 +6,7 @@ import requests
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(APP_DIR, "kwop.db"))
-app = Flask(__name__, static_folder=".", static_url_path="")
+app = Flask(__name__, static_folder=None)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-this-secret")
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE","0")=="1", MAX_CONTENT_LENGTH=2*1024*1024)
 
@@ -54,6 +54,10 @@ def ai(prompt, max_tokens=1800):
 @app.get("/")
 def home():
     return app.send_static_file("index.html")
+
+@app.get("/integration.js")
+def integration_js():
+    return send_file(os.path.join(APP_DIR, "integration.js"), mimetype="application/javascript")
 
 @app.get("/api/health")
 def health():
