@@ -216,6 +216,9 @@ def update_creator(creator_id):
     if "views" in d:
         try:p["views"]=max(0,int(d["views"]))
         except (ValueError,TypeError):return err("Views must be a non-negative number.")
+    if "url" in d:
+        try:p["profile_url"]=valid_url(d["url"])
+        except ValueError as e:return err(str(e))
     if not p:return err("No changes supplied.")
     rows=patch("kwop_creators",{"id":"eq."+creator_id,"user_id":"eq."+session["user_id"]},p)
     if not rows:return err("Creator not found.",404)
