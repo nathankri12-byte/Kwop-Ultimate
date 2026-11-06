@@ -53,4 +53,4 @@ function featureDone(id,v){let a=read('features',[]);a=a.map(x=>x.id===id?{...x,
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function download(name,text){let b=new Blob([text],{type:'text/plain'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
 renderPlan();renderCreators();renderFeatures();updateStats();let prof=read('profile',{});for(let k of ['interests','audience','hours','avoid','goal'])if(prof[k])$(k).value=prof[k];
-</script></body></html>
+</script><script src="/integration.js"></script></body></html>
