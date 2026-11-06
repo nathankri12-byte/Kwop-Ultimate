@@ -1,33 +1,51 @@
 # Kwop Ultimate
 
-An independent, local-first SaaS launch workspace inspired by publicly described SaaS launch workflows. This is not affiliated with Kwop.
+An independent SaaS launch workspace inspired by publicly described product-launch workflows. Not affiliated with Kwop.
 
-## Included in the first build
+## Current working features
 
-- Idea lab with audience, interests, time and constraints
-- SaaS product brief and landing-page copy generator
-- 30-day validation and growth checklist with saved progress
-- Short-form video script template adapted from a user's written reference notes
-- Creator outreach and manual view tracking
-- Feature roadmap with priorities
-- Browser-local persistence (localStorage)
-- Exportable product brief
+- Account registration and login with password hashing
+- Gemini-powered SaaS idea generation and product specifications
+- Gemini-powered short-form video script adaptation from a transcript or user-provided description
+- AI-generated runnable Flask MVP project bundle as a ZIP
+- Creator database with unique redirect tracking links and click counts
+- Local 30-day launch checklist and feature roadmap in the browser
+- Dashboard metrics and a local-first responsive interface
 
 ## Run locally
 
-Open `index.html` in a modern browser. No build step, API key, server, or paid service is required.
+1. Install Python 3.11+.
+2. Run `pip install -r requirements.txt`.
+3. Set a strong `SECRET_KEY`.
+4. Set `GEMINI_API_KEY` from Google AI Studio. The API key must stay on the server and must never be committed to GitHub.
+5. Optional: set `GEMINI_MODEL` (default: `gemini-3.8-flash`).
+6. Run `python app.py` and open http://localhost:5000.
 
-## Deploy as a static site
+The Gemini API currently offers a free tier for selected models, subject to quotas and terms. Free-tier availability and limits can change. See the official [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing).
 
-On Render, create a **Static Site** connected to this repository. Set the publish directory to `.`; no build command is needed.
+## Deployment
 
-## Important current limitations
+The backend requires a persistent database and secure environment variables. The current build uses SQLite for local development. Do not deploy this version to an ephemeral filesystem and assume accounts will persist: the database would be lost on restarts/redeploys. A managed PostgreSQL/Supabase adapter and deployment configuration are the next infrastructure step.
 
-This first version is a working frontend prototype. It does not yet include user accounts, cloud sync, an AI model connection, automatic video fetching/analysis, production app generation/deployment, payment processing, analytics integrations, or creator attribution links. The included generators use local templates and the data stays in the current browser. These features need backend services and secure provider configuration before they can be production-ready.
+Required server environment:
+- `SECRET_KEY`: long random secret
+- `GEMINI_API_KEY`: server-side Gemini API key
+- `GEMINI_MODEL`: optional model override
+- `DATABASE_PATH`: optional path to persistent SQLite file for a single-instance host
+- `COOKIE_SECURE=1`: enable secure session cookies behind HTTPS
+
+## Important limitations
+
+- Video URL alone is not automatically fetched or watched yet. The AI analyses a transcript or description entered by the user; automatic video ingestion is a separate integration.
+- Creator link clicks are tracked by Kwop Ultimate. External-platform views are not automatically available; they are entered manually.
+- Generated project ZIPs are real starter applications, but one-click hosting/deployment and production payment processing are not connected yet.
+- The 30-day checklist and roadmap currently use this browser's local storage. Cloud sync for these parts is still to be added.
+- The current database is SQLite. A persistent production database and backups are required before public launch.
+- This is an early build. Security review, abuse protection, privacy controls, tests, and provider setup are still required before real customers should use it.
 
 ## Privacy
 
-Workspace data is stored in the browser's localStorage on the device where it was entered. Clearing browser data can remove it. Do not enter sensitive information.
+Account passwords are stored as password hashes. AI prompts are sent to Google Gemini when AI features are used. Do not enter sensitive personal or payment data. Review Google's Gemini API data-use terms before using it with other people's information.
 
 ## License
 
