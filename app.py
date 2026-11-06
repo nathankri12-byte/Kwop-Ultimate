@@ -141,7 +141,7 @@ def brief():
     p=f"""Write a detailed practical SaaS specification in Markdown: positioning, persona, jobs-to-be-done, evidence to validate, user journey, MVP and exclusions, data entities, page UX, pricing hypotheses, landing copy, onboarding, activation/retention metrics, 30-day validation, privacy/security and low-cost architecture. Product {str(d.get('name',''))[:150]}, audience {str(d.get('audience',''))[:500]}, problem {str(d.get('problem',''))[:1800]}, solution {str(d.get('solution',''))[:1800]}, prices {d.get('price1')} and {d.get('price2')} EUR/month. Do not invent statistics or claim validation."""
     t,e=ai(p,5000)
     if e:return err(e,503)
-    insert("kwop_projects",{"user_id":session["user_id"],"name":str(d.get("name") or "Untitled")[:150],"brief":t})
+    insert("kwop_projects",{"user_id":session["user_id"],"name":str(d.get("name") or "Untitled")[:120],"brief":t})
     return jsonify(brief=t)
 @app.post("/api/ai/video-script")
 @signed
@@ -203,7 +203,7 @@ def add_creator():
     status=str(d.get("status","To contact"))
     if status not in ("To contact","Contacted","Interested","Posted","Declined"):return err("Invalid creator status.")
     code=secrets.token_urlsafe(9)
-    row=insert("kwop_creators",{"user_id":session["user_id"],"name":name[:150],"profile_url":url or None,"status":status,"views":views,"code":code})
+    row=insert("kwop_creators",{"user_id":session["user_id"],"name":name[:120],"profile_url":url or None,"status":status,"views":views,"code":code})
     insert("kwop_tracking_links",{"user_id":session["user_id"],"code":code,"target_url":url or None,"clicks":0})
     row["url"]=row.pop("profile_url",None);row["clicks"]=0
     return jsonify(creator=row,tracking_url=request.host_url.rstrip("/")+"/r/"+code)
@@ -286,7 +286,7 @@ def features_add():
     d=request.get_json(silent=True) or {};name=str(d.get("name","")).strip();priority=str(d.get("priority","Medium"))
     if not name:return err("Feature name is required.")
     if priority not in ("High","Medium","Low"):return err("Invalid priority.")
-    return jsonify(feature=insert("kwop_features",{"user_id":session["user_id"],"name":name[:300],"priority":priority,"done":False}))
+    return jsonify(feature=insert("kwop_features",{"user_id":session["user_id"],"name":name[:180],"priority":priority,"done":False}))
 @app.patch("/api/features/<feature_id>")
 @signed
 def features_patch(feature_id):
@@ -524,9 +524,6 @@ def score_get():
     parts={"product":min(25,10*bool(projects)+min(15,sum(1 for x in features if x["done"]))),"distribution":min(25,5*sum(1 for x in creators if x["status"] in ("Contacted","Interested","Posted"))),"validation":min(25,5*len(leads)),"execution":min(25,round(25*sum(1 for x in features if x["done"])/max(1,len(features))))}
     return jsonify(score=sum(parts.values()),breakdown=parts,label="Workspace readiness estimate, not a prediction of revenue.")
 
-@app.get("/api/health")
-def health_extended():
-    return jsonify(status="ok",supabase_configured=bool(SB_KEY),ai_configured=bool(GEMINI_KEY),model=GEMINI_MODEL)
 
 @app.errorhandler(RuntimeError)
 def runtime_error(e):return jsonify(error=str(e)),502
