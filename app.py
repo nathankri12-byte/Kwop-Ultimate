@@ -310,6 +310,119 @@ def features_delete(feature_id):
 def owned_upsert(table,payload,conflict):
     return sb("POST","/rest/v1/"+table,params={"on_conflict":conflict},data=payload,prefer="resolution=merge-duplicates,return=representation") or []
 
+
+# --- Store catalogue, customer records and orders ---
+@app.get("/api/store/products")
+@signed
+def store_products_get():
+    rows=select("kwop_products",{"select":"id,launch_id,name,description,price,currency,stock,sku,image_url,checkout_url,active,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc"})
+    return jsonify(products=rows)
+
+@app.post("/api/store/products")
+@signed
+def store_products_add():
+    d=request.get_json(silent=True) or {};name=str(d.get("name","")).strip()
+    if not name:return err("Product name is required.")
+    try:price=round(float(d.get("price",0)),2)
+    except (ValueError,TypeError):return err("Enter a valid price.")
+    if price<0 or price>10000000:return err("Price is out of range.")
+    currency=str(d.get("currency","EUR")).upper()
+    if currency not in ("EUR","USD","GBP"):return err("Unsupported currency.")
+    stock=None
+    if d.get("stock") not in (None,"","unlimited"):
+        try:stock=int(d.get("stock"))
+        except (ValueError,TypeError):return err("Stock must be a non-negative whole number or unlimited.")
+        if stock<0 or stock>10000000:return err("Stock is out of range.")
+    launch_id=str(d.get("launch_id","")).strip()
+    if not launch_id:return err("Choose a launch page for this product.")
+    if not select("kwop_launches",{"select":"id","id":"eq."+launch_id,"user_id":"eq."+session["user_id"],"limit":"1"}):return err("Launch page not found.",404)
+    try:
+        image_url=valid_url(d.get("image_url",""))
+        checkout_url=valid_url(d.get("checkout_url",""))
+    except ValueError as e:return err(str(e))
+    row=insert("kwop_products",{"user_id":session["user_id"],"launch_id":launch_id,"name":name[:150],"description":str(d.get("description",""))[:1200],"price":price,"currency":currency,"stock":stock,"sku":str(d.get("sku",""))[:80],"image_url":image_url,"checkout_url":checkout_url,"active":bool(d.get("active",True))})
+    return jsonify(product=row),201
+
+@app.patch("/api/store/products/<product_id>")
+@signed
+def store_products_patch(product_id):
+    d=request.get_json(silent=True) or {};p={}
+    for k,n in (("name",150),("description",1200),("sku",80)):
+        if k in d:p[k]=str(d[k]).strip()[:n]
+    if "price" in d:
+        try:p["price"]=round(float(d["price"]),2)
+        except (ValueError,TypeError):return err("Enter a valid price.")
+        if p["price"]<0 or p["price"]>10000000:return err("Price is out of range.")
+    if "currency" in d:
+        p["currency"]=str(d["currency"]).upper()
+        if p["currency"] not in ("EUR","USD","GBP"):return err("Unsupported currency.")
+    if "stock" in d:
+        if d["stock"] in (None,"","unlimited"):p["stock"]=None
+        else:
+            try:p["stock"]=int(d["stock"])
+            except (ValueError,TypeError):return err("Invalid stock.")
+            if p["stock"]<0:return err("Stock cannot be negative.")
+    for k in ("image_url","checkout_url"):
+        if k in d:
+            try:p[k]=valid_url(d[k])
+            except ValueError as e:return err(str(e))
+    if "active" in d:p["active"]=bool(d["active"])
+    if not p:return err("No changes supplied.")
+    rows=patch("kwop_products",{"id":"eq."+product_id,"user_id":"eq."+session["user_id"]},p)
+    if not rows:return err("Product not found.",404)
+    return jsonify(product=rows[0])
+
+@app.delete("/api/store/products/<product_id>")
+@signed
+def store_products_delete(product_id):
+    delete("kwop_products",{"id":"eq."+product_id,"user_id":"eq."+session["user_id"]})
+    return jsonify(ok=True)
+
+@app.get("/api/store/orders")
+@signed
+def store_orders_get():
+    rows=select("kwop_orders",{"select":"id,launch_id,product_id,customer_id,customer_name,customer_email,quantity,unit_price,total,currency,status,payment_reference,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc","limit":"500"})
+    return jsonify(orders=rows)
+
+@app.patch("/api/store/orders/<order_id>")
+@signed
+def store_orders_patch(order_id):
+    d=request.get_json(silent=True) or {};p={}
+    if "status" in d:
+        if d["status"] not in ("pending","paid","fulfilled","cancelled"):return err("Invalid order status.")
+        p["status"]=d["status"]
+    if "payment_reference" in d:p["payment_reference"]=str(d["payment_reference"])[:180]
+    if not p:return err("No changes supplied.")
+    rows=patch("kwop_orders",{"id":"eq."+order_id,"user_id":"eq."+session["user_id"]},p)
+    if not rows:return err("Order not found.",404)
+    return jsonify(order=rows[0])
+
+@app.get("/api/store/customers")
+@signed
+def store_customers_get():
+    rows=select("kwop_customers",{"select":"id,name,email,phone,created_at","user_id":"eq."+session["user_id"],"order":"created_at.desc","limit":"500"})
+    return jsonify(customers=rows)
+
+@app.post("/api/public-order")
+def public_order():
+    if not SB_KEY:return err("Ordering is not configured.",503)
+    d=request.get_json(silent=True) or {}
+    product_id=str(d.get("product_id",""))
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}",product_id):return err("Invalid product.")
+    try:quantity=int(d.get("quantity",1))
+    except (ValueError,TypeError):return err("Invalid quantity.")
+    headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"}
+    try:
+        r=requests.post(SB_URL+"/rest/v1/rpc/kwop_create_public_order",headers=headers,json={"p_product_id":product_id,"p_customer_name":str(d.get("name",""))[:120],"p_customer_email":str(d.get("email",""))[:254],"p_quantity":quantity},timeout=20)
+        if not r.ok:
+            try:message=r.json().get("message") or r.json().get("details") or "Order could not be created."
+            except ValueError:message="Order could not be created."
+            return err(message,400)
+        rows=r.json() or []
+        if not rows:return err("Order could not be confirmed.",502)
+        return jsonify(ok=True,order_id=rows[0].get("order_id"),total=rows[0].get("total")),201
+    except requests.RequestException:return err("Ordering is temporarily unavailable.",503)
+
 @app.get("/api/launches")
 @signed
 def launches_get():
