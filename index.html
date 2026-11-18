@@ -176,6 +176,28 @@ a:hover{color:#edffd0}
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
 
+
+/* Account gate shares the main studio visual language */
+#authGate{
+  background:rgba(4,9,6,.82)!important;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+#authGate>div{
+  max-width:440px!important;
+  padding:34px!important;
+  background:radial-gradient(circle at 95% 0%,rgba(201,243,106,.12),transparent 38%),linear-gradient(145deg,#17241a,#0c140e)!important;
+  border:1px solid #3b503e!important;
+  border-radius:22px!important;
+  box-shadow:0 30px 100px rgba(0,0,0,.62),0 0 0 1px rgba(201,243,106,.04)!important;
+}
+#authGate h2{font-size:27px;letter-spacing:-1.1px;color:#f4f8f1}
+#authGate>div>p{font-size:12px;line-height:1.7}
+#authGate .actions{display:grid;grid-template-columns:1fr 1fr}
+#authGate .actions .btn{min-height:44px}
+#authGate .field input{background:#09110b!important;border-color:#354a38!important}
+@media(max-width:480px){#authGate>div{padding:25px!important}#authGate .actions{grid-template-columns:1fr}}
+
 </style></head>
 <body><div class="app">
 <aside class="side"><div class="brand"><div class="mark">K</div>kwop<span style="color:var(--lime)">.</span></div><div class="navlabel">Workspace</div><div class="navlist"><button class="nav active" data-page="build"><span>✦</span> Build my business</button>
