@@ -73,7 +73,7 @@ def valid_url(v,empty=True):
 def ai(prompt,tokens=2500):
     if not GEMINI_KEY:return None,"AI is not configured. Add GEMINI_API_KEY in the server environment."
     try:
-        r=requests.post("https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent",params={"key":GEMINI_KEY},json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.7,"maxOutputTokens":tokens}},timeout=100)
+        r=requests.post("https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent",headers={"x-goog-api-key":GEMINI_KEY,"Content-Type":"application/json"},json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"maxOutputTokens":tokens}},timeout=100)
         j=r.json()
         if not r.ok:return None,j.get("error",{}).get("message","Gemini request failed.")
         t="\n".join(x.get("text","") for x in j.get("candidates",[{}])[0].get("content",{}).get("parts",[])).strip()
@@ -418,8 +418,10 @@ def leads_get():
 @signed
 def leads_add():
     d=request.get_json(silent=True) or {};email=str(d.get("email","")).strip().lower()
-    if not re.match(r"^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",email):return err("Enter a valid email address.")
-    row=insert("kwop_leads",{"user_id":session["user_id"],"email":email[:254],"name":str(d.get("name",""))[:120],"source":str(d.get("source","manual"))[:100],"status":"new","score":min(100,max(0,int(d.get("score",0)))),"notes":str(d.get("notes",""))[:2000]})
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$",email):return err("Enter a valid email address.")
+    try:score=min(100,max(0,int(d.get("score",0))))
+    except (ValueError,TypeError):return err("Score must be between 0 and 100.")
+    row=insert("kwop_leads",{"user_id":session["user_id"],"email":email[:254],"name":str(d.get("name",""))[:120],"source":str(d.get("source","manual"))[:100],"status":"new","score":score,"notes":str(d.get("notes",""))[:2000]})
     return jsonify(lead=row),201
 @app.patch("/api/leads/<lead_id>")
 @signed
@@ -583,8 +585,9 @@ Make the MVP possible for a solo beginner with the stated time and budget. Prefe
         required=("name","slug","tagline","one_liner","audience","problem","solution","features","pricing","landing","brief")
         if not isinstance(b,dict) or any(not b.get(k) for k in required):raise ValueError("Incomplete business plan.")
         name=str(b["name"])[:100]
-        slug=re.sub(r"[^a-z0-9]+","-",str(b["slug"]).lower()).strip("-")[:50] or "my-business"
-        if select("kwop_launches",{"select":"id","slug":"eq."+slug,"limit":"1"}):slug=slug+"-"+secrets.token_hex(2)
+        slug=re.sub(r"[^a-z0-9]+","-",str(b["slug"]).lower()).strip("-")[:42] or "my-business"
+        # Published slugs are globally unique; add a random suffix to avoid cross-account collisions.
+        slug=slug+"-"+secrets.token_hex(3)
         features=b["features"][:6] if isinstance(b["features"],list) else []
         pricing=b["pricing"][:3] if isinstance(b["pricing"],list) else []
         plans=[]
