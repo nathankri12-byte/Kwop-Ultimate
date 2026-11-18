@@ -17,6 +17,165 @@ body{background:radial-gradient(ellipse at 78% -12%,#253b2c 0,transparent 38%),#
 #build.section.active{display:block}#build .build-shell{max-width:1000px;margin:0 auto}#build .build-intro{text-align:center;margin:10px auto 30px;max-width:750px}#build .build-intro h1{font-size:clamp(38px,6vw,68px);line-height:1.02;letter-spacing:-3.5px;margin:12px 0}#build .build-intro p{font-size:17px;margin:0 auto;color:#a8b6aa}#build .build-card{padding:clamp(20px,4vw,38px);background:linear-gradient(145deg,#152019,#0e1511);border-color:#3b4b3d}#build .step-line{display:flex;gap:8px;justify-content:center;margin:24px 0 30px}#build .step-line span{height:4px;width:72px;border-radius:9px;background:#2b3a30}#build .step-line span:first-child{background:var(--lime)}#build .build-card h2{font-size:24px;letter-spacing:-.8px;margin:0 0 6px}#build .build-card .hint{margin:0 0 24px;color:#9ca99f;font-size:13px}#build .build-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:25px}#build .build-actions .btn.primary{min-width:190px;padding:14px 20px}#build .build-result{margin-top:22px;display:none}#build .result-hero{border:1px solid #3a4d3d;background:linear-gradient(135deg,#1b2b1e,#101a14);border-radius:16px;padding:24px;margin-bottom:14px}#build .result-hero h2{font-size:34px;margin:8px 0}#build .result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#build .result-tile{padding:16px;border:1px solid #2d3d32;background:#101812;border-radius:13px}#build .result-tile h3{font-size:13px;color:var(--lime);margin:0 0 7px}#build .result-tile p{margin:0;color:#d3ddd5;font-size:13px}#build .result-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 @media(max-width:900px){.app{grid-template-columns:1fr}.side{padding:12px}.brand{padding:3px 8px 12px}.navlist{display:flex;flex-direction:row;overflow:auto}.nav{white-space:nowrap;width:auto}.side details .navlist{flex-direction:column}.side details{max-width:100%}main{padding:22px 16px 55px}.hero h1{letter-spacing:-1.7px}#build .result-grid{grid-template-columns:1fr}#build .build-actions{align-items:stretch;flex-direction:column-reverse}#build .build-actions .btn{width:100%}}
 
+
+/* ── Kwop Studio / visual system v2 ───────────────────────────── */
+:root{
+  --bg:#080d0a;--panel:#111a14;--panel2:#17231a;--line:#2a3a2e;
+  --muted:#9ba99e;--text:#f4f7f2;--lime:#c9f36a;--blue:#a8c6a9;
+  --surface:#0c130e;--surface-raised:#17231a;--glow:rgba(201,243,106,.13);
+}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(ellipse 900px 560px at 86% -12%,rgba(75,111,65,.22),transparent 68%),
+    radial-gradient(ellipse 620px 440px at -18% 54%,rgba(36,76,48,.13),transparent 72%),
+    var(--bg);
+  color:var(--text);letter-spacing:-.012em;
+}
+::selection{background:rgba(201,243,106,.28);color:#fff}
+*{scrollbar-width:thin;scrollbar-color:#354638 transparent}
+button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+button{transition:transform .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease}
+button:active{transform:translateY(1px)}
+.app{grid-template-columns:236px minmax(0,1fr)}
+.side{
+  background:rgba(8,14,10,.94);border-right:1px solid rgba(132,163,133,.15);
+  backdrop-filter:blur(18px);padding:26px 15px;z-index:5;
+}
+.brand{font-size:24px;letter-spacing:-1.4px;padding:0 11px 34px}
+.mark{box-shadow:0 0 26px rgba(201,243,106,.16);font-size:18px}
+.navlabel{font-size:9px;letter-spacing:1.9px;padding:12px 13px 9px}
+.nav{font-size:13px;font-weight:570;padding:11px 12px;margin:3px 0;color:#aab8ad;border:1px solid transparent;transition:all .18s ease}
+.nav span{font-size:15px}
+.nav:hover{background:#152219;border-color:#2a3d2e;color:#f6faf3;transform:translateX(2px)}
+.nav.active{background:linear-gradient(100deg,rgba(201,243,106,.13),rgba(201,243,106,.035));border-color:rgba(201,243,106,.16);box-shadow:inset 2px 0 var(--lime);color:#f7faef}
+.side details summary{font-size:12px;font-weight:600;letter-spacing:.01em}
+.sidebottom{font-size:11px}
+.local{background:#101a13;border-color:#2b3b2f;padding:11px 12px}
+main{max-width:1540px;padding:36px clamp(22px,4.3vw,66px) 90px}
+.top{margin-bottom:38px;min-height:38px}
+.crumb{font-size:12px;letter-spacing:.02em}
+.topright{gap:12px}
+.topright .pill{font-size:10px;letter-spacing:.04em;padding:6px 10px}
+.avatar{width:36px;height:36px;border:1px solid #405342;box-shadow:0 4px 18px #0005}
+.hero{margin-bottom:28px;align-items:center}
+.hero h1{font-size:clamp(34px,4.3vw,54px);letter-spacing:-2.4px;line-height:1.04;margin:10px 0}
+.hero p{font-size:14px;line-height:1.7;max-width:660px}
+.eyebrow{font-size:10px;letter-spacing:2.2px}
+.card{
+  background:linear-gradient(145deg,rgba(21,32,24,.97),rgba(13,21,16,.98));
+  border:1px solid rgba(128,157,128,.2);border-radius:18px;padding:24px;
+  box-shadow:0 14px 44px rgba(0,0,0,.14);
+}
+.card h3{font-size:15px;letter-spacing:-.25px}
+.stats{gap:13px}
+.stats .card{position:relative;overflow:hidden;min-height:132px;padding:21px 22px}
+.stats .card:after{content:"";position:absolute;width:100px;height:100px;right:-52px;top:-55px;border-radius:50%;background:var(--glow);filter:blur(2px);pointer-events:none}
+.statlabel{font-size:11px;letter-spacing:.025em}
+.statvalue{font-size:35px;letter-spacing:-1.8px;line-height:1.1;margin:12px 0 8px}
+.statfoot{font-size:10px;color:#91a096}
+.columns{gap:14px}
+.task{gap:13px;padding:14px 1px;border-color:rgba(128,157,128,.12)}
+.task:hover{background:rgba(255,255,255,.018)}
+.tasktext{font-size:13px}
+.tasktext small{margin-top:3px}
+.pill{font-size:9px;letter-spacing:.035em;padding:5px 9px;border:1px solid rgba(151,184,151,.12)}
+.progress{height:8px;background:#26352a;border:1px solid #304333}
+.progress i{background:linear-gradient(90deg,#a9d94c,#d7f88a);box-shadow:0 0 12px rgba(201,243,106,.28);transition:width .35s ease}
+.btn{background:#19251c;border:1px solid #354838;border-radius:10px;font-size:12px;font-weight:650;padding:11px 16px}
+.btn:hover{background:#223328;border-color:#617b61;box-shadow:0 5px 18px #0003}
+.btn.primary{box-shadow:0 5px 20px rgba(201,243,106,.12);font-weight:750}
+.btn.primary:hover{background:#d7fb83;border-color:#d7fb83;box-shadow:0 7px 24px rgba(201,243,106,.2);transform:translateY(-1px)}
+.btn.small{font-size:11px;border-radius:8px;padding:8px 11px}
+.field{gap:8px}
+.field label{font-size:11px;font-weight:650;letter-spacing:.015em;color:#b9c6ba}
+.field input,.field select,.field textarea{
+  background:rgba(7,14,9,.82);border:1px solid #2d4032;border-radius:10px;
+  color:#f5f8f3;padding:13px 14px;font-size:13px;transition:border-color .18s ease,box-shadow .18s ease;
+}
+.field input::placeholder,.field textarea::placeholder{color:#647568}
+.field input:hover,.field select:hover,.field textarea:hover{border-color:#49614b}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:var(--lime);box-shadow:0 0 0 3px rgba(201,243,106,.09);outline:none;
+}
+.field textarea{line-height:1.6}
+.formgrid{gap:18px}
+.actions{gap:10px;margin-top:20px}
+.output{background:#0a120c;border-color:#314334;border-radius:12px;line-height:1.7;font-size:13px}
+.idea{background:linear-gradient(135deg,#142117,#0d160f);border-color:#344a37;padding:18px}
+.idea strong{font-size:16px;letter-spacing:-.3px}
+.notice{background:rgba(201,243,106,.055);border:1px solid rgba(201,243,106,.22);color:#d9e9c8;padding:14px 16px;line-height:1.6}
+.tablewrap{border:1px solid rgba(128,157,128,.12);border-radius:12px;margin-top:14px}
+table{font-size:12px}
+th{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a496;background:rgba(255,255,255,.018)}
+td{color:#dce5dc}
+th,td{padding:13px 12px;border-bottom-color:rgba(128,157,128,.12)}
+tr:last-child td{border-bottom:0}
+a{color:#d2f18f;text-underline-offset:3px}
+a:hover{color:#edffd0}
+.empty{font-size:12px}
+.footer{border-top:1px solid rgba(128,157,128,.12);padding-top:18px;line-height:1.7}
+#build .build-intro{margin:14px auto 34px}
+#build .build-intro h1{font-size:clamp(40px,6vw,72px);letter-spacing:-4px;line-height:.99;margin:16px 0}
+#build .build-intro p{max-width:650px;font-size:15px;line-height:1.75;color:#aebbb0}
+#build .step-line{gap:9px;margin:28px 0 32px}
+#build .step-line span{height:4px;width:64px;background:#29392d}
+#build .step-line span:first-child{background:var(--lime);box-shadow:0 0 12px rgba(201,243,106,.3)}
+#build .build-card{padding:clamp(22px,4vw,42px);border-radius:22px;background:linear-gradient(145deg,rgba(22,34,25,.98),rgba(11,19,13,.99));box-shadow:0 24px 80px rgba(0,0,0,.28);border-color:#354a38}
+#build .build-card h2{font-size:23px;letter-spacing:-.8px}
+#build .build-card .hint{font-size:12px;line-height:1.7;margin-bottom:27px}
+#build .build-actions{border-top:1px solid rgba(128,157,128,.14);padding-top:20px;margin-top:28px}
+#build .build-actions .btn.primary{border-radius:11px;min-height:48px}
+#build .result-hero{background:radial-gradient(circle at 90% 10%,rgba(201,243,106,.12),transparent 35%),linear-gradient(135deg,#1a2b1e,#101a13);border-color:#405943;padding:30px}
+#build .result-hero h2{font-size:clamp(30px,4vw,42px);letter-spacing:-1.8px}
+#build .result-tile{background:#101a13;border-color:#304333;padding:19px}
+#build .result-tile h3{font-size:10px;letter-spacing:1.3px}
+#build .result-tile p,#build .result-tile li{font-size:12px;line-height:1.7;color:#d2ddd3}
+#build .result-actions{align-items:center}
+.section{animation:kwopEnter .24s ease both}
+@keyframes kwopEnter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:sticky;top:0;height:auto;padding:10px 12px 9px;background:rgba(8,14,10,.97);border-bottom:1px solid #2b3b2e}
+  .brand{font-size:20px;padding:1px 8px 10px}
+  .mark{width:30px;height:30px}
+  .navlabel,.sidebottom{display:none}
+  .navlist{display:flex;flex-direction:row;overflow-x:auto;gap:5px;padding:0 0 2px;scrollbar-width:none}
+  .navlist::-webkit-scrollbar{display:none}
+  .nav{flex:0 0 auto;white-space:nowrap;width:auto;padding:9px 11px;font-size:11px;margin:0}
+  .nav span{display:inline-block;width:auto}
+  .side details{margin:4px 0 0}
+  .side details summary{padding:7px 10px;font-size:11px}
+  .side details .navlist{padding:4px 0 2px}
+  main{padding:22px 16px 58px}
+  .top{margin-bottom:27px}
+  .hero{align-items:flex-start;flex-direction:column;gap:15px}
+  .hero h1{font-size:clamp(32px,8vw,46px);letter-spacing:-1.8px}
+  .stats{gap:10px}
+  .stats .card{min-height:116px;padding:17px}
+  .statvalue{font-size:30px}
+  .columns{grid-template-columns:1fr}
+  .formgrid{grid-template-columns:1fr;gap:15px}
+  .field.full{grid-column:auto}
+  .card{padding:19px;border-radius:15px}
+  #build .build-intro h1{font-size:clamp(39px,10vw,58px);letter-spacing:-2.7px}
+  #build .build-intro p{font-size:13px}
+  #build .result-grid{grid-template-columns:1fr}
+  #build .build-actions{align-items:stretch;flex-direction:column-reverse}
+  #build .build-actions .btn{width:100%}
+}
+@media(max-width:420px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stats .card{padding:14px;min-height:108px}
+  .statvalue{font-size:27px}
+  .topright .pill{display:none}
+  #build .build-card{padding:19px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
 </style></head>
 <body><div class="app">
 <aside class="side"><div class="brand"><div class="mark">K</div>kwop<span style="color:var(--lime)">.</span></div><div class="navlabel">Workspace</div><div class="navlist"><button class="nav active" data-page="build"><span>✦</span> Build my business</button>
