@@ -91,7 +91,7 @@ def home():return send_file(os.path.join(APP_DIR,"index.html"))
 @app.get("/integration.js")
 def js():return send_file(os.path.join(APP_DIR,"integration.js"),mimetype="application/javascript")
 @app.get("/api/health")
-def health():return jsonify(status="ok",supabase_configured=bool(SB_KEY),ai_configured=bool(GEMINI_KEY),model=GEMINI_MODEL)
+def health():return jsonify(status="ok",supabase_configured=bool(SB_KEY),ai_configured=bool(GEMINI_KEY),secret_key_configured=bool(os.environ.get("SECRET_KEY")),model=GEMINI_MODEL)
 
 @app.post("/api/auth/register")
 def register():
@@ -236,17 +236,18 @@ def remove_creator(creator_id):
 @app.get("/r/<code>")
 def track(code):
     if not SB_KEY:return "Tracking is unavailable",503
-    public_headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY}
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}",code):return "Tracking link not found",404
+    public_headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"}
     try:
-        r=requests.get(SB_URL+"/rest/v1/kwop_tracking_links",params={"select":"code,target_url,clicks","code":"eq."+code,"limit":"1"},headers=public_headers,timeout=15)
-        rows=r.json() if r.ok else []
+        r=requests.post(SB_URL+"/rest/v1/rpc/kwop_track_referral",headers=public_headers,json={"p_code":code},timeout=15)
+        if not r.ok:return "Tracking temporarily unavailable",503
+        rows=r.json()
         if not rows:return "Tracking link not found",404
-        row=rows[0]
-        requests.patch(SB_URL+"/rest/v1/kwop_tracking_links",params={"code":"eq."+code},headers={**public_headers,"Content-Type":"application/json","Prefer":"return=minimal"},json={"clicks":int(row.get("clicks") or 0)+1},timeout=15)
-        try:dest=valid_url(row.get("target_url"),False) if row.get("target_url") else "/"
+        target=rows[0].get("target_url")
+        try:dest=valid_url(target,False) if target else "/"
         except ValueError:dest="/"
         return redirect(dest,302)
-    except requests.RequestException:return "Tracking temporarily unavailable",503
+    except (requests.RequestException,ValueError):return "Tracking temporarily unavailable",503
 @app.get("/api/dashboard")
 @signed
 def dashboard():
