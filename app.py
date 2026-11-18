@@ -390,6 +390,10 @@ def store_orders_patch(order_id):
     d=request.get_json(silent=True) or {};p={}
     if "status" in d:
         if d["status"] not in ("pending","paid","fulfilled","cancelled"):return err("Invalid order status.")
+        existing=select("kwop_orders",{"select":"status,product_id,quantity","id":"eq."+order_id,"user_id":"eq."+session["user_id"],"limit":"1"})
+        if existing and d["status"]=="cancelled" and existing[0]["status"]!="cancelled" and existing[0].get("product_id"):
+            product=select("kwop_products",{"select":"stock","id":"eq."+existing[0]["product_id"],"user_id":"eq."+session["user_id"],"limit":"1"})
+            if product and product[0].get("stock") is not None:patch("kwop_products",{"id":"eq."+existing[0]["product_id"],"user_id":"eq."+session["user_id"]},{"stock":int(product[0]["stock"])+int(existing[0]["quantity"])})
         p["status"]=d["status"]
     if "payment_reference" in d:p["payment_reference"]=str(d["payment_reference"])[:180]
     if not p:return err("No changes supplied.")
