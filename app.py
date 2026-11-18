@@ -688,7 +688,7 @@ Return ONLY valid JSON with this exact structure:
 "audience":"specific audience",
 "problem":"urgent problem in plain language",
 "solution":"clear product solution",
-"features":[{{"name":"feature name","description":"benefit"}}],
+"features":[{{"name":"feature name","description":"benefit"}}],\n"products":[{{"name":"product name","description":"what buyer receives","price":19,"currency":"EUR","sku":"optional short sku"}}],
 "pricing":[{{"name":"Free","price":0,"description":"what is included"}},{{"name":"Pro","price":9,"description":"what is included"}}],
 "landing":{{"headline":"strong customer-facing headline","subheadline":"clear explanation","body":"2-4 short paragraphs with benefits and how it works"}},
 "brand":{{"style":"visual direction","primary":"hex colour","accent":"hex colour"}},
@@ -696,7 +696,7 @@ Return ONLY valid JSON with this exact structure:
 "first_7_days":["seven small specific tasks"],
 "brief":"detailed product specification in Markdown, including MVP scope, user journey, page structure, pricing hypothesis, validation and realistic risks"
 }}
-Make the MVP possible for a solo beginner with the stated time and budget. Prefer a narrow B2C SaaS or simple digital business. Do not promise income, guaranteed customers or market validation. No fake testimonials, statistics or invented competitors. Features must be specific. Keep pricing realistic. If budget is zero, use free tools and a waitlist instead of paid infrastructure. Do not suggest regulated or age-restricted products. Output valid JSON only."""
+Make the MVP possible for a solo beginner with the stated time and budget. For Online store, create 3-5 concrete product suggestions and explain inventory/delivery assumptions; for Digital product, create 1-3 digital products; for SaaS / web app, return an empty products array and focus on the software MVP. Do not silently switch the requested business type. Do not present AI product suggestions as real stock or fulfilled orders. Do not promise income, guaranteed customers or market validation. No fake testimonials, statistics or invented competitors. Features must be specific. Keep pricing realistic. If budget is zero, use free tools and a waitlist instead of paid infrastructure. Do not suggest regulated or age-restricted products. Output valid JSON only."""
     t,e=ai(prompt,6500)
     if e:return err(e,503)
     try:
@@ -721,7 +721,15 @@ Make the MVP possible for a solo beginner with the stated time and budget. Prefe
         brief=str(b["brief"])[:18000]
         project=insert("kwop_projects",{"user_id":session["user_id"],"name":name,"brief":brief})
         launch=insert("kwop_launches",{"user_id":session["user_id"],"slug":slug,"title":name,"description":str(b["one_liner"])[:1800],"landing_copy":copy,"plans":plans,"published":True})
-        result={"business":{"name":name,"slug":slug,"tagline":str(b["tagline"])[:250],"one_liner":str(b["one_liner"])[:600],"audience":str(b["audience"])[:500],"problem":str(b["problem"])[:1200],"solution":str(b["solution"])[:1500],"features":features,"pricing":plans,"landing":copy,"brand":b.get("brand",{}),"marketing":b.get("marketing",{}),"first_7_days":b.get("first_7_days",[])[:7],"brief":brief},"project_id":project.get("id") if project else None,"launch_id":launch.get("id") if launch else None,"url":request.host_url.rstrip("/")+"/p/"+slug}
+        store_products=[]
+        for product in (b.get("products") if isinstance(b.get("products"),list) else [])[:5]:
+            if not isinstance(product,dict) or not str(product.get("name","")).strip():continue
+            try:product_price=max(0,round(float(product.get("price",0)),2))
+            except (TypeError,ValueError):product_price=0
+            currency=str(product.get("currency","EUR")).upper()
+            if currency not in ("EUR","USD","GBP"):currency="EUR"
+            store_products.append(insert("kwop_products",{"user_id":session["user_id"],"launch_id":launch["id"],"name":str(product.get("name"))[:150],"description":str(product.get("description",""))[:1200],"price":product_price,"currency":currency,"sku":str(product.get("sku",""))[:80],"active":False}))
+        result={"business":{"name":name,"slug":slug,"tagline":str(b["tagline"])[:250],"one_liner":str(b["one_liner"])[:600],"audience":str(b["audience"])[:500],"problem":str(b["problem"])[:1200],"solution":str(b["solution"])[:1500],"features":features,"products":store_products,"pricing":plans,"landing":copy,"brand":b.get("brand",{}),"marketing":b.get("marketing",{}),"first_7_days":b.get("first_7_days",[])[:7],"brief":brief},"project_id":project.get("id") if project else None,"launch_id":launch.get("id") if launch else None,"url":request.host_url.rstrip("/")+"/p/"+slug}
         return jsonify(result),201
     except (ValueError,TypeError,KeyError) as ex:
         return err("The AI could not create a complete business plan. Please try again. "+str(ex),502)
