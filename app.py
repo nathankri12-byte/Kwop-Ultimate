@@ -440,6 +440,7 @@ def launches_add():
     if not title:return err("Launch title is required.")
     slug=re.sub(r"[^a-z0-9]+","-",str(d.get("slug") or title).lower()).strip("-")[:60]
     if not slug:return err("Choose a valid public page name.")
+    if select("kwop_launches",{"select":"id","slug":"eq."+slug,"user_id":"eq."+session["user_id"],"limit":"1"}):slug=slug[:52]+"-"+secrets.token_hex(3)
     description=str(d.get("description",""))[:1800]
     copy=d.get("landing_copy") if isinstance(d.get("landing_copy"),dict) else {}
     plans=d.get("plans") if isinstance(d.get("plans"),list) else []
@@ -473,7 +474,10 @@ def launches_patch(launch_id):
             plans.append({"name":str(x.get("name","Plan"))[:60],"price":price,"description":str(x.get("description",""))[:300]})
         p["plans"]=plans
     if not p:return err("No changes supplied.")
-    rows=patch("kwop_launches",{"id":"eq."+launch_id,"user_id":"eq."+session["user_id"]},p)
+    try:rows=patch("kwop_launches",{"id":"eq."+launch_id,"user_id":"eq."+session["user_id"]},p)
+    except RuntimeError as e:
+        if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():return err("That public page URL is already taken. Choose another slug.",409)
+        raise
     if not rows:return err("Launch page not found.",404)
     return jsonify(launch=rows[0])
 
