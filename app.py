@@ -526,6 +526,30 @@ def public_event():
         return jsonify(ok=True)
     except requests.RequestException:return err("Analytics temporarily unavailable.",503)
 
+
+@app.post("/api/public-replay-event")
+def public_replay_event():
+    if not SB_KEY:return err("Visitor replay is not configured.",503)
+    d=request.get_json(silent=True) or {}
+    launch_id=str(d.get("launch_id",""))
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}",launch_id):return err("Invalid launch.")
+    session_key=str(d.get("session_key",""))
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,80}",session_key):return err("Invalid session.")
+    event_type=str(d.get("event_type",""))
+    if event_type not in ("page_view","click","cta_click","scroll"):return err("Invalid replay event.")
+    metadata=d.get("metadata") if isinstance(d.get("metadata"),dict) else {}
+    safe_metadata={"scroll_y":max(0,min(100000,int(metadata.get("scroll_y",0) or 0))) if str(metadata.get("scroll_y","")).isdigit() else None,"viewport_width":max(0,min(10000,int(metadata.get("viewport_width",0) or 0))) if str(metadata.get("viewport_width","")).isdigit() else None,"element_tag":str(metadata.get("element_tag",""))[:12]}
+    headers={"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"}
+    payload={"p_launch_id":launch_id,"p_session_key":session_key,"p_event_type":event_type,"p_page_path":str(d.get("page_path","/"))[:200],"p_label":str(d.get("label",""))[:100],"p_event_value":d.get("event_value"),"p_metadata":safe_metadata}
+    try:
+        r=requests.post(SB_URL+"/rest/v1/rpc/kwop_record_public_replay",headers=headers,json=payload,timeout=15)
+        if not r.ok:
+            try:message=r.json().get("message") or "Replay event could not be saved."
+            except ValueError:message="Replay event could not be saved."
+            return err(message,400)
+        return jsonify(ok=True)
+    except requests.RequestException:return err("Visitor replay is temporarily unavailable.",503)
+
 @app.get("/api/analytics")
 @signed
 def analytics_get():
@@ -535,7 +559,8 @@ def analytics_get():
     summary={"page_views":sum(1 for e in events if e["event_type"]=="page_view"),"cta_clicks":sum(1 for e in events if e["event_type"]=="cta_click"),"pricing_views":sum(1 for e in events if e["event_type"]=="pricing_view"),"unique_visitors":len(set(e["session_key"] for e in events))}
     names={x["id"]:x["title"] for x in launches}
     recent=[{**e,"launch_title":names.get(e["launch_id"],"Launch")} for e in events[:50]]
-    return jsonify(summary=summary,launches=launches,recent=recent)
+    sessions=select("kwop_sessions",{"select":"id,session_key,started_at,last_seen_at,duration_seconds,page_views,entry_page,exit_page,replay","user_id":"eq."+session["user_id"],"order":"started_at.desc","limit":"100"})
+    return jsonify(summary=summary,launches=launches,recent=recent,sessions=sessions)
 
 @app.get("/api/leads")
 @signed
